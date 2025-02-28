@@ -115,7 +115,7 @@ public class BlurEffectManager : MonoBehaviour
     void Update()
     {
         // 카메라의 정면 (화면 정면)을 기준으로 위치를 고정시키기 위해
-        Vector3 screenCenter = new Vector3(0.5f, 0.5f, 1f);  // 화면의 중앙에 고정
+        Vector3 screenCenter = new Vector3(0.5f, 0.5f, 2f);  // 화면의 중앙에 고정
         Vector3 worldPosition = Camera.main.ViewportToWorldPoint(screenCenter);  // 화면 좌표를 월드 좌표로 변환
 
         // 타이틀 텍스트의 위치를 화면 정면으로 고정
