@@ -8,43 +8,49 @@ public class BlurEffectManager : MonoBehaviour
 {
     public PostProcessVolume postProcessVolume;  // Post-Processing Volume 참조
     public TextMeshPro titleText;  // 3D 타이틀 텍스트 컴포넌트 (TextMeshPro로 변경)
-    public float blurIntensity = 1f;  // 블러 강도
-    public float titleFadeOutTime = 1f; // 타이틀 텍스트 서서히 사라지는 시간 (초)
-    public float blurFadeOutTime = 3f; // 블러 효과 서서히 사라지는 시간 (초)
+    public float titleFadeOutTime = 3f; // 타이틀 텍스트 서서히 사라지는 시간 (초)
+    public float blurFadeOutTime = 3f;  // 블러 효과 서서히 사라지는 시간 (초)
 
     private DepthOfField depthOfField;  // Depth of Field 효과 참조
+    private PostProcessProfile profile;  // PostProcessProfile 참조
 
     void Start()
     {
-        // Post-Process Volume에서 DepthOfField 효과를 가져옵니다.
-        postProcessVolume.profile.TryGetSettings(out depthOfField);
+        // PostProcessVolume에서 Profile과 DepthOfField 효과를 가져옵니다.
+        if (postProcessVolume != null && postProcessVolume.profile != null)
+        {
+            postProcessVolume.profile.TryGetSettings(out depthOfField);
+        }
+        profile = postProcessVolume.profile;  // PostProcessProfile 참조
 
-        // 초기 블러 효과를 바로 적용 (시작 시 바로 블러 효과 활성화)
-        ApplyBlurEffect();
+        // Focal Length를 최대값으로 설정 (한 번만 설정)
+        if (depthOfField != null)
+        {
+            depthOfField.focalLength.value = Mathf.Max(depthOfField.focalLength.value, 200f);  // 원하는 최대값으로 설정
+        }
     }
 
-    // 타이틀 텍스트의 알파값을 1로 설정하고 타이틀 텍스트를 활성화, 블러 효과를 바로 적용
-    public void ShowTitleAndApplyBlur()
+    // 타이틀 텍스트와 블러 효과를 동시에 실행하는 함수
+    public void OnTitle()
     {
-        ResetTitleTextAlpha();  // 타이틀 텍스트 알파값 초기화
+        ResetTitleText();  // 타이틀 텍스트 알파값 초기화
         titleText.gameObject.SetActive(true);  // 타이틀 텍스트를 화면에 표시
+
+        OnBlurEffect(1f);  // Weight 1로 설정
     }
 
     // 타이틀 텍스트 알파값 초기화 (1로 되돌림)
-    private void ResetTitleTextAlpha()
+    private void ResetTitleText()
     {
         Color color = titleText.color;
         color.a = 1f;  // 알파값을 1로 설정
         titleText.color = color;
     }
 
-    // 블러 효과를 바로 적용
-    private void ApplyBlurEffect()
+    // 블러 효과를 즉시 적용 (weight: PostProcess의 weight)
+    private void OnBlurEffect(float weight)
     {
-        if (depthOfField != null)
-        {
-            depthOfField.focusDistance.value = blurIntensity;  // 블러 강도 바로 적용 (1로 설정)
-        }
+        postProcessVolume.weight = weight;  // PostProcessVolume의 weight 설정
     }
 
     // 타이틀 텍스트가 서서히 사라지게 하는 코루틴
@@ -66,34 +72,34 @@ public class BlurEffectManager : MonoBehaviour
         titleText.gameObject.SetActive(false); // 타이틀 텍스트를 비활성화하여 화면에서 제거
     }
 
-    // 블러 효과 서서히 사라지게 하는 코루틴
+    // 블러 효과와 Weight를 서서히 사라지게 하는 코루틴
     public IEnumerator FadeOutBlur()
     {
-        if (depthOfField != null)
-        {
-            float currentBlur = depthOfField.focusDistance.value;
-            float elapsedTime = 0f;
+        float elapsedTime = 0f;
+        float startWeight = postProcessVolume.weight;  // 초기 Weight 값
 
-            // 블러 강도를 서서히 1에서 0까지 줄여나갑니다.
-            while (elapsedTime < blurFadeOutTime)
-            {
-                elapsedTime += Time.deltaTime; // 시간을 갱신
-                currentBlur = Mathf.Lerp(blurIntensity, 0f, elapsedTime / blurFadeOutTime); // 1에서 0으로 줄어드는 효과
-                depthOfField.focusDistance.value = Mathf.Max(currentBlur, 0f); // 강도가 0 이하로 내려가지 않도록 제한
-                yield return null;  // 매 프레임마다 업데이트
-            }
+        // Weight 값을 0으로 서서히 감소
+        while (elapsedTime < blurFadeOutTime)
+        {
+            elapsedTime += Time.deltaTime;  // 시간 경과
+            float newWeight = Mathf.Lerp(startWeight, 0f, elapsedTime / blurFadeOutTime);  // Lerp로 Weight 변화
+            OnBlurEffect(newWeight);  // Weight만 변경
+            yield return null;  // 매 프레임마다 업데이트
         }
+
+        // 최종적으로 0으로 설정
+        OnBlurEffect(0f);
     }
 
     // 타이틀 텍스트와 블러 효과를 동시에 서서히 사라지게 하는 코루틴
-    public void StartTitleAndBlurFadeOut(Action onComplete)
+    public void StartFadeOut(Action onComplete)
     {
         // 타이틀 텍스트와 블러 효과를 동시에 페이드 아웃
-        StartCoroutine(TitleAndBlurFadeOutCoroutine(onComplete));
+        StartCoroutine(StartFadeOutCoroutine(onComplete));
     }
 
     // 타이틀 텍스트와 블러 효과를 동시에 서서히 사라지게 하는 코루틴
-    private IEnumerator TitleAndBlurFadeOutCoroutine(Action onComplete)
+    private IEnumerator StartFadeOutCoroutine(Action onComplete)
     {
         Coroutine fadeTitleCoroutine = StartCoroutine(FadeOutTitleText());  // 타이틀 페이드 아웃
         Coroutine fadeBlurCoroutine = StartCoroutine(FadeOutBlur());  // 블러 페이드 아웃
